@@ -1,0 +1,139 @@
+# ==============================================================================
+# iNeuBytes AI Internship - Root .gitignore
+# Repositories: Task_1_CNN, Task_2_Sentiment_Analysis, Major_Project
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Python & Bytecode Cache
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.manifest
+*.spec
+
+# ------------------------------------------------------------------------------
+# Virtual Environments
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+conda-env/
+
+# ------------------------------------------------------------------------------
+# IDEs, Editors & OS Files
+# ------------------------------------------------------------------------------
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# ------------------------------------------------------------------------------
+# Jupyter Notebooks & Interactive Environments
+# ------------------------------------------------------------------------------
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+**/.ipynb_checkpoints/*
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ------------------------------------------------------------------------------
+# Datasets, Raw & Processed Data (across all task directories)
+# ------------------------------------------------------------------------------
+**/data/raw/*
+!**/data/raw/.gitkeep
+**/data/processed/*
+!**/data/processed/.gitkeep
+**/data/downloaded/*
+!**/data/downloaded/.gitkeep
+**/dataset/*
+**/datasets/*
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.rar
+
+# Allow frozen split index files and metadata to be committed
+!**/data/splits/
+!**/data/splits/**
+!**/splits/
+!**/splits/**
+
+# ------------------------------------------------------------------------------
+# Model Weights, Checkpoints & Large Binary Artifacts
+# ------------------------------------------------------------------------------
+**/models/checkpoints/*
+!**/models/checkpoints/.gitkeep
+**/models/exported/*
+!**/models/exported/.gitkeep
+**/models/saved_models/*
+!**/models/saved_models/.gitkeep
+**/checkpoints/*
+!**/checkpoints/.gitkeep
+
+# Common Deep Learning Model Weight Formats (TensorFlow, PyTorch, HuggingFace, ONNX, etc.)
+*.keras
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.bin
+*.pkl
+*.joblib
+*.pb
+variables/
+assets/
+
+# ------------------------------------------------------------------------------
+# Logs, Monitoring & Temporary Experiment Outputs
+# ------------------------------------------------------------------------------
+**/results/logs/*
+!**/results/logs/.gitkeep
+**/logs/*
+!**/logs/.gitkeep
+*.log
+events.out.tfevents.*
+wandb/
+mlruns/
+
+# ------------------------------------------------------------------------------
+# Keep Trackable .gitkeep Files
+# ------------------------------------------------------------------------------
+!**/.gitkeep

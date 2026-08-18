@@ -1,0 +1,31 @@
+# ==============================================================================
+# iNeuBytes AI Internship - Task 1: Computer Vision using CNN Models
+# TensorFlow/Keras Environment for CIFAR-10 (Adapted AlexNet)
+# ==============================================================================
+
+# Core Numerical & Data Processing
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
+
+# Deep Learning Framework (TensorFlow / Keras ecosystem)
+tensorflow>=2.13.0
+
+# Computer Vision & Image Processing
+Pillow>=9.5.0
+opencv-python>=4.7.0.72
+
+# Machine Learning & Quantitative Evaluation Metrics
+scikit-learn>=1.2.0
+
+# Visualization & Plotting (Loss/Accuracy curves, Confusion Matrices)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Configuration Management & Utilities
+PyYAML>=6.0
+tqdm>=4.65.0
+
+# Interactive Experimentation & Prototyping
+jupyterlab>=4.0.0
+ipykernel>=6.23.0
