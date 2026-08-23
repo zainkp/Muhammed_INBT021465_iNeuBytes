@@ -9,13 +9,13 @@ Architectural & Experimental Guardrails:
 - Model Compilation: Adam optimizer with configured learning rate (0.001) and
   Sparse Categorical Crossentropy loss for integer labels.
 - Fixed Epoch Budget: Trains for exactly 30 epochs (DEFAULT_EPOCHS) without EarlyStopping.
+  The training interface strictly enforces this budget and rejects attempts to override it.
+- Pure Training Focus: Accepts only training and validation data streams.
 - No Regularization: No Dropout, Batch Normalization, weight decay, or data augmentation.
 - Checkpointing: Saves the best model checkpoint (.keras) based on validation accuracy
   to `Task_1_CNN/models/checkpoints/`.
 - Logging: Persists training and validation metric history to `Task_1_CNN/results/logs/`
   in both CSV and JSON formats for downstream evaluation and plotting.
-- Test Set Isolation: Test dataset is strictly quarantined and never evaluated during
-  training to prevent data leakage.
 """
 
 import json
@@ -103,16 +103,19 @@ class BaselineTrainer:
             csv_log_filename (str): Filename for saving CSV training logs. Defaults to "baseline_training_log.csv".
             monitor_metric (str): Metric to monitor for best checkpoint saving. Defaults to "val_accuracy".
             monitor_mode (str): Optimization mode ('max' or 'min') for monitor_metric. Defaults to "max".
+
+        Raises:
+            ValueError: If epochs is explicitly provided with a value other than DEFAULT_EPOCHS (30).
         """
         if epochs != DEFAULT_EPOCHS:
             raise ValueError(
                 f"Baseline training protocol enforces a fixed epoch budget of {DEFAULT_EPOCHS} epochs. "
-                f"Received: epochs={epochs}. Silently overriding the epoch budget is not permitted."
+                f"Received: epochs={epochs}. Overriding the fixed epoch budget is not permitted."
             )
 
         self.model = model
         self.learning_rate = float(learning_rate)
-        self.epochs = int(epochs)
+        self.epochs = DEFAULT_EPOCHS
         self.batch_size = int(batch_size)
 
         self.checkpoints_dir = Path(checkpoints_dir)
@@ -278,18 +281,14 @@ class BaselineTrainer:
         self,
         train_data: Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]],
         val_data: Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]],
-        test_data: Optional[Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]] = None,
-        epochs: Optional[int] = None,
         batch_size: Optional[int] = None,
         verbose: int = 1,
     ) -> tf.keras.callbacks.History:
         """
-        Execute the baseline training run.
+        Execute the baseline training run for the fixed 30-epoch budget.
 
         Safety & Integrity Guarantees:
-        - Complies with fixed epoch budget (30 epochs).
-        - Rejects silent or explicit overrides of the configured epoch budget.
-        - Test set is never evaluated or accessed during training.
+        - Complies strictly with the fixed epoch budget (DEFAULT_EPOCHS = 30).
         - Records and returns complete Keras History.
         - Persists best model checkpoint (.keras) to models/checkpoints/.
         - Saves CSV and JSON logs to results/logs/.
@@ -299,27 +298,12 @@ class BaselineTrainer:
                 Training tf.data.Dataset or (x_train, y_train) tuple.
             val_data (Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]):
                 Validation tf.data.Dataset or (x_val, y_val) tuple.
-            test_data (Optional[Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]]):
-                Optional test dataset. Strictly ignored during training to maintain test isolation.
-            epochs (Optional[int]): Number of epochs. If provided, must match configured epoch budget (DEFAULT_EPOCHS=30).
             batch_size (Optional[int]): Batch size if numpy arrays are passed. Defaults to self.batch_size (64).
             verbose (int): Training verbosity (0 = silent, 1 = progress bar, 2 = one line per epoch). Defaults to 1.
 
         Returns:
             tf.keras.callbacks.History: The complete Keras History object.
         """
-        if epochs is not None and epochs != self.epochs:
-            raise ValueError(
-                f"Cannot override fixed epoch budget: Baseline training protocol requires "
-                f"exactly {self.epochs} epochs (DEFAULT_EPOCHS={DEFAULT_EPOCHS}), but epochs={epochs} was provided."
-            )
-
-        if test_data is not None:
-            logger.info(
-                "Test dataset provided to trainer: Strictly isolated. "
-                "Test set will NOT be evaluated during training."
-            )
-
         num_epochs = self.epochs
         bs = batch_size if batch_size is not None else self.batch_size
 
@@ -331,7 +315,7 @@ class BaselineTrainer:
         callbacks = self._setup_callbacks(verbose=verbose)
 
         logger.info("=" * 70)
-        logger.info(f"Starting Baseline CNN Training for {num_epochs} Epochs")
+        logger.info(f"Starting Baseline CNN Training for Fixed Epoch Budget: {num_epochs} Epochs")
         logger.info(f"  - Model Name         : {self.model.name}")
         logger.info(f"  - Total Parameters   : {self.model.count_params():,}")
         logger.info(f"  - Initial LR         : {self.learning_rate}")
@@ -386,7 +370,6 @@ def train_baseline_model(
     model: tf.keras.Model,
     train_dataset: Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]],
     val_dataset: Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]],
-    test_dataset: Optional[Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]] = None,
     learning_rate: float = DEFAULT_LEARNING_RATE,
     epochs: int = DEFAULT_EPOCHS,
     batch_size: int = DEFAULT_BATCH_SIZE,
@@ -406,8 +389,6 @@ def train_baseline_model(
         model (tf.keras.Model): Uncompiled or pre-built Keras model.
         train_dataset (Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]): Training data.
         val_dataset (Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]): Validation data.
-        test_dataset (Optional[Union[tf.data.Dataset, Tuple[np.ndarray, np.ndarray]]]):
-            Optional test data (strictly isolated, not used during training).
         learning_rate (float): Adam optimizer learning rate. Defaults to DEFAULT_LEARNING_RATE (0.001).
         epochs (int): Total epochs. Must equal DEFAULT_EPOCHS (30).
         batch_size (int): Batch size. Defaults to DEFAULT_BATCH_SIZE (64).
@@ -420,13 +401,16 @@ def train_baseline_model(
         monitor_mode (str): Checkpoint monitor mode (default 'max').
         verbose (int): Verbosity mode.
 
+    Raises:
+        ValueError: If epochs does not equal DEFAULT_EPOCHS (30).
+
     Returns:
         Tuple[tf.keras.Model, tf.keras.callbacks.History]: Trained model and Keras History object.
     """
     if epochs != DEFAULT_EPOCHS:
         raise ValueError(
             f"Baseline training protocol enforces a fixed epoch budget of {DEFAULT_EPOCHS} epochs. "
-            f"Received: epochs={epochs}. Silently overriding the epoch budget is not permitted."
+            f"Received: epochs={epochs}. Overriding the fixed epoch budget is not permitted."
         )
 
     trainer = BaselineTrainer(
@@ -447,8 +431,6 @@ def train_baseline_model(
     history = trainer.train(
         train_data=train_dataset,
         val_data=val_dataset,
-        test_data=test_dataset,
-        epochs=epochs,
         batch_size=batch_size,
         verbose=verbose,
     )
@@ -467,13 +449,13 @@ if __name__ == "__main__":
     print("=" * 75)
 
     # 1. Instantiate baseline architecture
-    test_model = build_baseline_cnn()
-    print(f"  - Model initialized: {test_model.name}")
-    print(f"  - Model initial compiled state: {test_model.compiled}")
+    sample_model = build_baseline_cnn()
+    print(f"  - Model initialized: {sample_model.name}")
+    print(f"  - Model initial compiled state: {sample_model.compiled}")
 
     # 2. Instantiate BaselineTrainer
     trainer = BaselineTrainer(
-        model=test_model,
+        model=sample_model,
         learning_rate=DEFAULT_LEARNING_RATE,
         epochs=DEFAULT_EPOCHS,
         batch_size=DEFAULT_BATCH_SIZE,
@@ -498,22 +480,16 @@ if __name__ == "__main__":
 
     # 5. Verify epoch budget enforcement guardrails
     try:
-        BaselineTrainer(model=test_model, epochs=10)
+        BaselineTrainer(model=sample_model, epochs=10)
         print("  - BaselineTrainer(epochs=10) check: FAILED (did not raise ValueError)")
-    except ValueError as e:
-        print(f"  - BaselineTrainer(epochs=10) check: PASSED (Raised ValueError as expected)")
+    except ValueError:
+        print("  - BaselineTrainer(epochs=10) check: PASSED (Raised ValueError as expected)")
 
     try:
-        trainer.train(train_data=(None, None), val_data=(None, None), epochs=5)
-        print("  - trainer.train(epochs=5) override check: FAILED (did not raise ValueError)")
-    except ValueError as e:
-        print(f"  - trainer.train(epochs=5) override check: PASSED (Raised ValueError as expected)")
-
-    try:
-        train_baseline_model(model=test_model, train_dataset=(None, None), val_dataset=(None, None), epochs=15)
+        train_baseline_model(model=sample_model, train_dataset=(None, None), val_dataset=(None, None), epochs=15)
         print("  - train_baseline_model(epochs=15) check: FAILED (did not raise ValueError)")
-    except ValueError as e:
-        print(f"  - train_baseline_model(epochs=15) check: PASSED (Raised ValueError as expected)")
+    except ValueError:
+        print("  - train_baseline_model(epochs=15) check: PASSED (Raised ValueError as expected)")
 
     print("=" * 75)
     print("  Trainer verification completed successfully. (Full training run deferred).")
