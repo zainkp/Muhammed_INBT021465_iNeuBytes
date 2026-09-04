@@ -96,6 +96,65 @@ def build_baseline_cnn(
     return model
 
 
+def build_dropout_cnn(
+    input_shape: Tuple[int, int, int] = IMAGE_SHAPE,
+    num_classes: int = NUM_CLASSES,
+    dropout_rate: float = 0.5,
+    name: str = "dropout_cifar10_cnn",
+) -> tf.keras.Model:
+    """
+    Build and return the uncompiled Dropout variant of the baseline CNN architecture.
+
+    Architecture Overview:
+        - Block 1: 2x Conv2D (64, 3x3, ReLU, same) + MaxPooling2D (2x2, stride 2)
+        - Block 2: 2x Conv2D (128, 3x3, ReLU, same) + MaxPooling2D (2x2, stride 2)
+        - Block 3: 1x Conv2D (256, 3x3, ReLU, same) + MaxPooling2D (2x2, stride 2)
+        - Classification Head:
+            - Flatten()
+            - Dense(512, activation='relu')
+            - Dropout(rate=dropout_rate) [Regularization added here]
+            - Dense(num_classes, activation='softmax')
+
+    Constraints:
+        - Convolutional feature extractor is identical to baseline.
+        - Exactly one Dropout layer added after Dense(512) and before Dense(10).
+        - No Batch Normalization, L1/L2 weight decay, or data augmentation.
+        - Total parameters remain exactly 2,658,122.
+
+    Args:
+        input_shape (Tuple[int, int, int]): Input image dimensions (H, W, C). Defaults to (32, 32, 3).
+        num_classes (int): Number of target classification classes. Defaults to 10.
+        dropout_rate (float): Dropout probability rate. Defaults to 0.5.
+        name (str): Name of the Keras model. Defaults to "dropout_cifar10_cnn".
+
+    Returns:
+        tf.keras.Model: An uncompiled Keras Sequential model instance with Dropout.
+    """
+    model = models.Sequential(
+        [
+            layers.Input(shape=input_shape, name="input_layer"),
+            # Stage 1: Block 1
+            layers.Conv2D(64, (3, 3), padding="same", activation="relu", name="conv1_1"),
+            layers.Conv2D(64, (3, 3), padding="same", activation="relu", name="conv1_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool1"),
+            # Stage 2: Block 2
+            layers.Conv2D(128, (3, 3), padding="same", activation="relu", name="conv2_1"),
+            layers.Conv2D(128, (3, 3), padding="same", activation="relu", name="conv2_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool2"),
+            # Stage 3: Block 3
+            layers.Conv2D(256, (3, 3), padding="same", activation="relu", name="conv3_1"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool3"),
+            # Stage 4: Classification Head
+            layers.Flatten(name="flatten"),
+            layers.Dense(512, activation="relu", name="dense1"),
+            layers.Dropout(rate=dropout_rate, name="dropout1"),
+            layers.Dense(num_classes, activation="softmax", name="predictions"),
+        ],
+        name=name,
+    )
+    return model
+
+
 def get_model_summary(model: Optional[tf.keras.Model] = None) -> str:
     """
     Generate and return a formatted string summary of the CNN architecture.

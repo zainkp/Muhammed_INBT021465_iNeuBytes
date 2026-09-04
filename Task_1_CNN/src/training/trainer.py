@@ -87,6 +87,7 @@ class BaselineTrainer:
         csv_log_filename: str = "baseline_training_log.csv",
         monitor_metric: str = "val_accuracy",
         monitor_mode: str = "max",
+        experiment_name: str = "baseline_cnn",
     ) -> None:
         """
         Initialize the Baseline Trainer.
@@ -103,6 +104,7 @@ class BaselineTrainer:
             csv_log_filename (str): Filename for saving CSV training logs. Defaults to "baseline_training_log.csv".
             monitor_metric (str): Metric to monitor for best checkpoint saving. Defaults to "val_accuracy".
             monitor_mode (str): Optimization mode ('max' or 'min') for monitor_metric. Defaults to "max".
+            experiment_name (str): Experiment identifier for metadata logging. Defaults to "baseline_cnn".
 
         Raises:
             ValueError: If epochs is explicitly provided with a value other than DEFAULT_EPOCHS (30).
@@ -117,6 +119,7 @@ class BaselineTrainer:
         self.learning_rate = float(learning_rate)
         self.epochs = DEFAULT_EPOCHS
         self.batch_size = int(batch_size)
+        self.experiment_name = experiment_name
 
         self.checkpoints_dir = Path(checkpoints_dir)
         self.checkpoint_filename = checkpoint_filename
@@ -259,7 +262,7 @@ class BaselineTrainer:
 
         # Format history metrics to native Python floats for JSON serialization
         history_dict: Dict[str, Any] = {
-            "experiment": "baseline_cnn",
+            "experiment": self.experiment_name,
             "epochs_configured": self.epochs,
             "epochs_completed": len(history.epoch) if hasattr(history, "epoch") else len(next(iter(history.history.values()))),
             "learning_rate": self.learning_rate,

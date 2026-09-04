@@ -1,0 +1,44 @@
+# ==============================================================================
+# Task 1 Part B - Experiment 1A Configuration: Baseline + Dropout (0.5) ONLY
+# TensorFlow / Keras Implementation
+# ==============================================================================
+
+experiment_name: "dropout_regularization_cifar10"
+experiment_type: "regularization"
+seed: 42
+
+dataset:
+  name: "cifar10"
+  image_shape: [32, 32, 3]
+  num_classes: 10
+  batch_size: 64
+  # Frozen split counts (out of 50k original training images)
+  train_samples: 40000
+  val_samples: 10000
+  test_samples: 10000
+  split_file: "data/splits/cifar10_split_indices.json"
+
+model:
+  architecture: "baseline_cifar10_cnn_with_dropout"
+  in_shape: [32, 32, 3]
+  num_classes: 10
+  regularization: "dropout"
+  dropout_rate: 0.5
+  batch_normalization: false
+  l1_reg: 0.0
+  l2_reg: 0.0
+
+training:
+  # Fixed epoch budget across experiments
+  epochs: 30
+  initial_lr: 0.001
+  optimizer: "adam"
+  loss: "sparse_categorical_crossentropy"
+  metrics: ["accuracy"]
+  early_stopping: false
+  lr_schedule: false
+  checkpoint_metric: "val_accuracy"
+  checkpoint_mode: "max"
+  checkpoint_filename: "dropout_cifar10_best.keras"
+  csv_log_filename: "dropout_training_log.csv"
+  history_filename: "dropout_training_history.json"
