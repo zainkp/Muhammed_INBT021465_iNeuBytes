@@ -155,6 +155,94 @@ def build_dropout_cnn(
     return model
 
 
+def build_batchnorm_cnn(
+    input_shape: Tuple[int, int, int] = IMAGE_SHAPE,
+    num_classes: int = NUM_CLASSES,
+    name: str = "batchnorm_cifar10_cnn",
+) -> tf.keras.Model:
+    """
+    Build and return the uncompiled Batch Normalization variant of the baseline CNN architecture for CIFAR-10.
+
+    Architecture Overview (Conventional Topology: Conv/Dense -> BN -> ReLU):
+        - Block 1:
+            - Conv2D(64, (3, 3), padding='same', name='conv1_1') [no activation]
+            - BatchNormalization(name='bn1_1')
+            - ReLU(name='relu1_1')
+            - Conv2D(64, (3, 3), padding='same', name='conv1_2') [no activation]
+            - BatchNormalization(name='bn1_2')
+            - ReLU(name='relu1_2')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool1')
+        - Block 2:
+            - Conv2D(128, (3, 3), padding='same', name='conv2_1') [no activation]
+            - BatchNormalization(name='bn2_1')
+            - ReLU(name='relu2_1')
+            - Conv2D(128, (3, 3), padding='same', name='conv2_2') [no activation]
+            - BatchNormalization(name='bn2_2')
+            - ReLU(name='relu2_2')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool2')
+        - Block 3:
+            - Conv2D(256, (3, 3), padding='same', name='conv3_1') [no activation]
+            - BatchNormalization(name='bn3_1')
+            - ReLU(name='relu3_1')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool3')
+        - Classification Head:
+            - Flatten(name='flatten')
+            - Dense(512, name='dense1') [no activation]
+            - BatchNormalization(name='bn_dense1')
+            - ReLU(name='relu_dense1')
+            - Dense(num_classes, activation='softmax', name='predictions')
+
+    Constraints:
+        - Exactly 6 BatchNormalization layers (5 conv stages + 1 dense stage).
+        - Exactly 6 ReLU activation layers placed immediately after BatchNormalization.
+        - Zero Dropout layers.
+        - Zero L1/L2 weight decay or regularizers.
+        - Total parameters: 2,662,730 (Trainable: 2,660,426, Non-trainable: 2,304).
+
+    Args:
+        input_shape (Tuple[int, int, int]): Input image dimensions (H, W, C). Defaults to (32, 32, 3).
+        num_classes (int): Number of target classification classes. Defaults to 10.
+        name (str): Name of the Keras model. Defaults to "batchnorm_cifar10_cnn".
+
+    Returns:
+        tf.keras.Model: An uncompiled Keras Sequential model instance with Batch Normalization.
+    """
+    model = models.Sequential(
+        [
+            layers.Input(shape=input_shape, name="input_layer"),
+            # Stage 1: Block 1
+            layers.Conv2D(64, (3, 3), padding="same", name="conv1_1"),
+            layers.BatchNormalization(name="bn1_1"),
+            layers.ReLU(name="relu1_1"),
+            layers.Conv2D(64, (3, 3), padding="same", name="conv1_2"),
+            layers.BatchNormalization(name="bn1_2"),
+            layers.ReLU(name="relu1_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool1"),
+            # Stage 2: Block 2
+            layers.Conv2D(128, (3, 3), padding="same", name="conv2_1"),
+            layers.BatchNormalization(name="bn2_1"),
+            layers.ReLU(name="relu2_1"),
+            layers.Conv2D(128, (3, 3), padding="same", name="conv2_2"),
+            layers.BatchNormalization(name="bn2_2"),
+            layers.ReLU(name="relu2_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool2"),
+            # Stage 3: Block 3
+            layers.Conv2D(256, (3, 3), padding="same", name="conv3_1"),
+            layers.BatchNormalization(name="bn3_1"),
+            layers.ReLU(name="relu3_1"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool3"),
+            # Stage 4: Classification Head
+            layers.Flatten(name="flatten"),
+            layers.Dense(512, name="dense1"),
+            layers.BatchNormalization(name="bn_dense1"),
+            layers.ReLU(name="relu_dense1"),
+            layers.Dense(num_classes, activation="softmax", name="predictions"),
+        ],
+        name=name,
+    )
+    return model
+
+
 def get_model_summary(model: Optional[tf.keras.Model] = None) -> str:
     """
     Generate and return a formatted string summary of the CNN architecture.
