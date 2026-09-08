@@ -29,13 +29,13 @@ from tensorflow.keras import layers, models
 # Config & Path Handling (Support both package and direct execution)
 # ------------------------------------------------------------------------------
 try:
-    from src.config import IMAGE_SHAPE, NUM_CLASSES
+    from src.config import DEFAULT_WEIGHT_DECAY, IMAGE_SHAPE, NUM_CLASSES
 except (ImportError, ModuleNotFoundError):
     current_file = Path(__file__).resolve()
     project_root = current_file.parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-    from src.config import IMAGE_SHAPE, NUM_CLASSES
+    from src.config import DEFAULT_WEIGHT_DECAY, IMAGE_SHAPE, NUM_CLASSES
 
 
 def build_baseline_cnn(
@@ -237,6 +237,75 @@ def build_batchnorm_cnn(
             layers.BatchNormalization(name="bn_dense1"),
             layers.ReLU(name="relu_dense1"),
             layers.Dense(num_classes, activation="softmax", name="predictions"),
+        ],
+        name=name,
+    )
+    return model
+
+
+def build_l2_cnn(
+    input_shape: Tuple[int, int, int] = IMAGE_SHAPE,
+    num_classes: int = NUM_CLASSES,
+    l2_reg: float = DEFAULT_WEIGHT_DECAY,
+    name: str = "l2_cifar10_cnn",
+) -> tf.keras.Model:
+    """
+    Build and return the uncompiled L2 Regularization variant of the baseline CNN architecture for CIFAR-10.
+
+    Architecture Overview:
+        - Block 1:
+            - Conv2D(64, (3, 3), padding='same', activation='relu', kernel_regularizer=l2(l2_reg), name='conv1_1')
+            - Conv2D(64, (3, 3), padding='same', activation='relu', kernel_regularizer=l2(l2_reg), name='conv1_2')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool1')
+        - Block 2:
+            - Conv2D(128, (3, 3), padding='same', activation='relu', kernel_regularizer=l2(l2_reg), name='conv2_1')
+            - Conv2D(128, (3, 3), padding='same', activation='relu', kernel_regularizer=l2(l2_reg), name='conv2_2')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool2')
+        - Block 3:
+            - Conv2D(256, (3, 3), padding='same', activation='relu', kernel_regularizer=l2(l2_reg), name='conv3_1')
+            - MaxPooling2D(pool_size=(2, 2), strides=2, name='pool3')
+        - Classification Head:
+            - Flatten(name='flatten')
+            - Dense(512, activation='relu', kernel_regularizer=l2(l2_reg), name='dense1')
+            - Dense(num_classes, activation='softmax', kernel_regularizer=l2(l2_reg), name='predictions')
+
+    Constraints:
+        - Exact same layer layout and channel dimensions as baseline CNN.
+        - L2 weight regularization (default 1e-4) applied strictly to trainable kernel weights of all Conv2D and Dense layers.
+        - Zero bias regularization (bias_regularizer=None).
+        - Zero Dropout layers.
+        - Zero Batch Normalization layers.
+        - Total parameters remain exactly 2,658,122 (Trainable: 2,658,122, Non-trainable: 0).
+
+    Args:
+        input_shape (Tuple[int, int, int]): Input image dimensions (H, W, C). Defaults to (32, 32, 3).
+        num_classes (int): Number of target classification classes. Defaults to 10.
+        l2_reg (float): L2 regularization factor. Defaults to DEFAULT_WEIGHT_DECAY (1e-4).
+        name (str): Name of the Keras model. Defaults to "l2_cifar10_cnn".
+
+    Returns:
+        tf.keras.Model: An uncompiled Keras Sequential model instance with L2 kernel regularization.
+    """
+    regularizer = tf.keras.regularizers.l2(l2_reg) if l2_reg > 0 else None
+
+    model = models.Sequential(
+        [
+            layers.Input(shape=input_shape, name="input_layer"),
+            # Stage 1: Block 1
+            layers.Conv2D(64, (3, 3), padding="same", activation="relu", kernel_regularizer=regularizer, name="conv1_1"),
+            layers.Conv2D(64, (3, 3), padding="same", activation="relu", kernel_regularizer=regularizer, name="conv1_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool1"),
+            # Stage 2: Block 2
+            layers.Conv2D(128, (3, 3), padding="same", activation="relu", kernel_regularizer=regularizer, name="conv2_1"),
+            layers.Conv2D(128, (3, 3), padding="same", activation="relu", kernel_regularizer=regularizer, name="conv2_2"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool2"),
+            # Stage 3: Block 3
+            layers.Conv2D(256, (3, 3), padding="same", activation="relu", kernel_regularizer=regularizer, name="conv3_1"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=2, name="pool3"),
+            # Stage 4: Classification Head
+            layers.Flatten(name="flatten"),
+            layers.Dense(512, activation="relu", kernel_regularizer=regularizer, name="dense1"),
+            layers.Dense(num_classes, activation="softmax", kernel_regularizer=regularizer, name="predictions"),
         ],
         name=name,
     )

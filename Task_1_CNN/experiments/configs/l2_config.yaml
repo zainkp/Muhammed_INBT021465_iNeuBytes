@@ -1,0 +1,46 @@
+# ==============================================================================
+# Task 1 Part B - Experiment 1C Configuration: Baseline + L2 Regularization (1e-4) ONLY
+# TensorFlow / Keras Implementation
+# ==============================================================================
+
+experiment_name: "l2_regularization_cifar10"
+experiment_type: "regularization"
+seed: 42
+
+dataset:
+  name: "cifar10"
+  image_shape: [32, 32, 3]
+  num_classes: 10
+  batch_size: 64
+  # Frozen split counts (out of 50k original training images)
+  train_samples: 40000
+  val_samples: 10000
+  test_samples: 10000
+  split_file: "data/splits/cifar10_split_indices.json"
+
+model:
+  architecture: "l2_cifar10_cnn"
+  in_shape: [32, 32, 3]
+  num_classes: 10
+  regularization: "l2"
+  dropout_rate: 0.0
+  batch_normalization: false
+  l1_reg: 0.0
+  l2_reg: 0.0001
+  l2_target_weights: "kernel"
+  bias_regularization: false
+
+training:
+  # Fixed epoch budget across experiments
+  epochs: 30
+  initial_lr: 0.001
+  optimizer: "adam"
+  loss: "sparse_categorical_crossentropy"
+  metrics: ["accuracy"]
+  early_stopping: false
+  lr_schedule: false
+  checkpoint_metric: "val_accuracy"
+  checkpoint_mode: "max"
+  checkpoint_filename: "l2_cifar10_best.keras"
+  csv_log_filename: "l2_training_log.csv"
+  history_filename: "l2_training_history.json"
