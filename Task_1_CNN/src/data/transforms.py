@@ -13,7 +13,18 @@ Experiment 2A (Light Augmentation) Specifications:
 - Cropping / Resizing: None (32x32 image dimensions preserved)
 - Augmentation is applied exclusively to the training dataset stream.
 - Validation and test datasets remain 100% unaugmented.
+
+Experiment 2B (Moderate Augmentation) Specifications:
+- Random horizontal flip: tf.keras.layers.RandomFlip(mode="horizontal") (Enabled)
+- Small random rotation: tf.keras.layers.RandomRotation(factor=0.05) (Enabled, ±18 degrees)
+- Small random translation: tf.keras.layers.RandomTranslation(height_factor=0.05, width_factor=0.05) (Enabled, ±5% / ~1.6px)
+- Zoom: 0.0 (strictly disabled)
+- Brightness / Contrast adjustments: 0.0 (strictly disabled)
+- Cropping / Resizing: None (32x32 image dimensions preserved)
+- Augmentation is applied exclusively to the training dataset stream.
+- Validation and test datasets remain 100% unaugmented.
 - Source CIFAR-10 data on disk and in memory is not permanently modified.
+- Deterministic random seed (42) preserved throughout.
 """
 
 import logging
@@ -47,7 +58,7 @@ if not logger.handlers:
 
 
 # ------------------------------------------------------------------------------
-# Light Augmentation Layer Builder
+# Light Augmentation Layer Builder (Experiment 2A)
 # ------------------------------------------------------------------------------
 def get_light_augmentation_pipeline(
     seed: int = RANDOM_SEED,
@@ -86,6 +97,60 @@ def get_light_augmentation_pipeline(
 
 
 # ------------------------------------------------------------------------------
+# Moderate Augmentation Layer Builder (Experiment 2B)
+# ------------------------------------------------------------------------------
+def get_moderate_augmentation_pipeline(
+    rotation_factor: float = 0.05,
+    height_shift_factor: float = 0.05,
+    width_shift_factor: float = 0.05,
+    seed: int = RANDOM_SEED,
+    name: str = "moderate_augmentation_pipeline",
+) -> tf.keras.Sequential:
+    """
+    Construct and return a Keras Sequential preprocessing pipeline for Moderate Data Augmentation.
+
+    Strict Experimental Controls (Experiment 2B):
+    - Random horizontal flip: tf.keras.layers.RandomFlip(mode="horizontal", seed=seed)
+    - Small random rotation: tf.keras.layers.RandomRotation(factor=0.05, seed=seed) (±18 degrees)
+    - Small random translation: tf.keras.layers.RandomTranslation(height_factor=0.05, width_factor=0.05, seed=seed) (~±1.6 pixels)
+    - Zoom: 0.0 (strictly disabled)
+    - Brightness / Contrast adjustments: 0.0 (strictly disabled)
+    - No resizing or cropping.
+
+    Args:
+        rotation_factor (float): Rotation range as a fraction of 2pi (0.05 = ±18 deg). Defaults to 0.05.
+        height_shift_factor (float): Vertical translation range (0.05 = ±5% or ~1.6px). Defaults to 0.05.
+        width_shift_factor (float): Horizontal translation range (0.05 = ±5% or ~1.6px). Defaults to 0.05.
+        seed (int): Deterministic random seed for Keras augmentation layers. Defaults to RANDOM_SEED (42).
+        name (str): Layer name for the Sequential pipeline. Defaults to "moderate_augmentation_pipeline".
+
+    Returns:
+        tf.keras.Sequential: A Sequential model containing RandomFlip, RandomRotation, and RandomTranslation.
+    """
+    augmentation_model = tf.keras.Sequential(
+        [
+            layers.Input(shape=IMAGE_SHAPE, name="augmentation_input"),
+            layers.RandomFlip(mode="horizontal", seed=seed, name="random_horizontal_flip"),
+            layers.RandomRotation(factor=rotation_factor, seed=seed, name="random_rotation"),
+            layers.RandomTranslation(
+                height_factor=height_shift_factor,
+                width_factor=width_shift_factor,
+                seed=seed,
+                name="random_translation",
+            ),
+        ],
+        name=name,
+    )
+    logger.info(
+        f"Built moderate augmentation pipeline '{name}' with RandomFlip(mode='horizontal', seed={seed}), "
+        f"RandomRotation(factor={rotation_factor}, seed={seed}), and "
+        f"RandomTranslation(height_factor={height_shift_factor}, width_factor={width_shift_factor}, seed={seed}). "
+        f"Zoom, brightness, contrast, and cropping are strictly disabled."
+    )
+    return augmentation_model
+
+
+# ------------------------------------------------------------------------------
 # Configurable Augmentation Pipeline Builder
 # ------------------------------------------------------------------------------
 def build_augmentation_pipeline(
@@ -104,6 +169,8 @@ def build_augmentation_pipeline(
 
     For Light Augmentation (Experiment 2A), only horizontal_flip is True and
     all numeric factors must be 0.0.
+    For Moderate Augmentation (Experiment 2B), horizontal_flip is True,
+    rotation_factor is 0.05, and translation factors are 0.05.
 
     Args:
         horizontal_flip (bool): Whether to enable random horizontal flipping.
@@ -161,7 +228,7 @@ def build_augmentation_pipeline(
 
 
 # ------------------------------------------------------------------------------
-# Augmented tf.data Dataset Pipeline Constructor
+# Augmented tf.data Dataset Pipeline Constructors
 # ------------------------------------------------------------------------------
 def create_light_augmented_train_dataset(
     x_train: np.ndarray,
@@ -173,13 +240,6 @@ def create_light_augmented_train_dataset(
 ) -> tf.data.Dataset:
     """
     Construct high-performance tf.data.Dataset training pipeline with Light Data Augmentation.
-
-    Pipeline Steps:
-    1. from_tensor_slices((x_train, y_train))
-    2. shuffle(buffer_size, seed=seed, reshuffle_each_iteration=True)
-    3. batch(batch_size)
-    4. map(augmentation_layer, num_parallel_calls=AUTOTUNE) -> applies horizontal flip per batch
-    5. prefetch(AUTOTUNE)
 
     Args:
         x_train (np.ndarray): Training images of shape (N, 32, 32, 3) in [0.0, 1.0].
@@ -214,6 +274,50 @@ def create_light_augmented_train_dataset(
     return train_ds
 
 
+def create_moderate_augmented_train_dataset(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    shuffle_buffer: int = 10000,
+    seed: int = RANDOM_SEED,
+    augmentation_layer: Optional[tf.keras.layers.Layer] = None,
+) -> tf.data.Dataset:
+    """
+    Construct high-performance tf.data.Dataset training pipeline with Moderate Data Augmentation.
+
+    Args:
+        x_train (np.ndarray): Training images of shape (N, 32, 32, 3) in [0.0, 1.0].
+        y_train (np.ndarray): Training integer labels of shape (N,).
+        batch_size (int): Mini-batch size. Defaults to DEFAULT_BATCH_SIZE (64).
+        shuffle_buffer (int): Buffer size for training dataset shuffling. Defaults to 10,000.
+        seed (int): Deterministic random seed. Defaults to RANDOM_SEED (42).
+        augmentation_layer (Optional[tf.keras.layers.Layer]): Preprocessing layer/model.
+            If None, instantiates get_moderate_augmentation_pipeline(seed=seed).
+
+    Returns:
+        tf.data.Dataset: Configured training tf.data.Dataset.
+    """
+    if augmentation_layer is None:
+        augmentation_layer = get_moderate_augmentation_pipeline(seed=seed)
+
+    logger.info(
+        f"Creating moderate-augmented training tf.data pipeline (batch_size={batch_size}, shuffle_buffer={shuffle_buffer})..."
+    )
+
+    train_ds = (
+        tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        .shuffle(buffer_size=shuffle_buffer, seed=seed, reshuffle_each_iteration=True)
+        .batch(batch_size)
+        .map(
+            lambda x, y: (augmentation_layer(x, training=True), y),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
+        .prefetch(buffer_size=tf.data.AUTOTUNE)
+    )
+
+    return train_ds
+
+
 def create_augmented_tf_datasets(
     x_train: np.ndarray,
     y_train: np.ndarray,
@@ -230,7 +334,7 @@ def create_augmented_tf_datasets(
     Construct high-performance tf.data pipelines for Train (augmented), Val (unaugmented), and Test (unaugmented).
 
     Strict Experimental Controls:
-    - Train: Shuffle + Batch + Light Augmentation (Horizontal Flip) + Prefetch.
+    - Train: Shuffle + Batch + Augmentation + Prefetch.
     - Val: Batch + Prefetch (ZERO Augmentation).
     - Test: Batch + Prefetch (ZERO Augmentation, held strictly isolated).
 
@@ -253,7 +357,7 @@ def create_augmented_tf_datasets(
         augmentation_pipeline = get_light_augmentation_pipeline(seed=seed)
 
     logger.info(
-        f"Building tf.data.Dataset pipelines: Train=Augmented(RandomFlip), Val=Unaugmented, Test=Unaugmented (batch_size={batch_size})..."
+        f"Building tf.data.Dataset pipelines: Train=Augmented({augmentation_pipeline.name}), Val=Unaugmented, Test=Unaugmented (batch_size={batch_size})..."
     )
 
     # Training pipeline: shuffle + batch + augment + prefetch
@@ -321,6 +425,8 @@ def verify_light_augmentation_config(config: Dict[str, Any]) -> bool:
         "shift": 0.0,
         "width_shift": 0.0,
         "height_shift": 0.0,
+        "width_shift_factor": 0.0,
+        "height_shift_factor": 0.0,
         "zoom": 0.0,
         "zoom_factor": 0.0,
         "brightness": 0.0,
@@ -338,6 +444,9 @@ def verify_light_augmentation_config(config: Dict[str, Any]) -> bool:
     if config.get("crop", False):
         raise ValueError("Experiment 2A violation: 'crop' must be False.")
 
+    if config.get("resize", False):
+        raise ValueError("Experiment 2A violation: 'resize' must be False.")
+
     if config.get("validation_augmented", False):
         raise ValueError("Experiment 2A violation: validation dataset must NOT be augmented.")
 
@@ -347,29 +456,143 @@ def verify_light_augmentation_config(config: Dict[str, Any]) -> bool:
     return True
 
 
+def verify_moderate_augmentation_config(config: Dict[str, Any]) -> bool:
+    """
+    Strictly verify that an augmentation configuration dictionary complies with Experiment 2B controls.
+
+    Guarantees:
+    - horizontal_flip is True
+    - rotation_factor == 0.05 (exact ±18 deg)
+    - height_shift_factor == 0.05 (exact ±5% / ~1.6px)
+    - width_shift_factor == 0.05 (exact ±5% / ~1.6px)
+    - zoom_factor == 0.0
+    - brightness_factor == 0.0
+    - contrast_factor == 0.0
+    - crop is False
+    - resize is False
+    - apply_to == "train_only"
+    - validation_augmented is False
+    - test_augmented is False
+
+    Args:
+        config (Dict[str, Any]): Augmentation config section.
+
+    Raises:
+        ValueError: If any parameter deviates from exact Experiment 2B controls.
+
+    Returns:
+        bool: True if configuration complies with Experiment 2B controls.
+    """
+    if not config.get("horizontal_flip", False):
+        raise ValueError("Experiment 2B violation: 'horizontal_flip' must be True.")
+
+    rotation_factor = float(config.get("rotation_factor", 0.0))
+    if abs(rotation_factor - 0.05) > 1e-6:
+        raise ValueError(
+            f"Experiment 2B violation: 'rotation_factor' must be exactly 0.05 (±18 deg), got {rotation_factor}."
+        )
+
+    height_shift = float(config.get("height_shift_factor", 0.0))
+    if abs(height_shift - 0.05) > 1e-6:
+        raise ValueError(
+            f"Experiment 2B violation: 'height_shift_factor' must be exactly 0.05 (±5%), got {height_shift}."
+        )
+
+    width_shift = float(config.get("width_shift_factor", 0.0))
+    if abs(width_shift - 0.05) > 1e-6:
+        raise ValueError(
+            f"Experiment 2B violation: 'width_shift_factor' must be exactly 0.05 (±5%), got {width_shift}."
+        )
+
+    disallowed_keys = {
+        "zoom": 0.0,
+        "zoom_factor": 0.0,
+        "brightness": 0.0,
+        "brightness_factor": 0.0,
+        "contrast": 0.0,
+        "contrast_factor": 0.0,
+    }
+
+    for key, expected_val in disallowed_keys.items():
+        if key in config and float(config[key]) != expected_val:
+            raise ValueError(
+                f"Experiment 2B violation: '{key}' must be {expected_val}, but found {config[key]}."
+            )
+
+    if config.get("crop", False):
+        raise ValueError("Experiment 2B violation: 'crop' must be False.")
+
+    if config.get("resize", False):
+        raise ValueError("Experiment 2B violation: 'resize' must be False.")
+
+    if config.get("apply_to") != "train_only":
+        raise ValueError(
+            f"Experiment 2B violation: 'apply_to' must be 'train_only', got '{config.get('apply_to')}'."
+        )
+
+    if config.get("validation_augmented", False):
+        raise ValueError("Experiment 2B violation: validation dataset must NOT be augmented.")
+
+    if config.get("test_augmented", False):
+        raise ValueError("Experiment 2B violation: test dataset must NOT be augmented.")
+
+    return True
+
+
 # ------------------------------------------------------------------------------
 # Standalone Module Verification
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     print("=" * 75)
-    print("  Transforms & Augmentation Module Verification (Experiment 2A)")
+    print("  Transforms & Augmentation Module Verification (Experiments 2A & 2B)")
     print("=" * 75)
 
-    pipeline = get_light_augmentation_pipeline(seed=RANDOM_SEED)
-    print(f"  • Pipeline Name: {pipeline.name}")
-    print(f"  • Layers: {[layer.name for layer in pipeline.layers]}")
-    print(f"  • Total Layers: {len(pipeline.layers)}")
+    # 1. Light Augmentation Pipeline Verification
+    light_pipeline = get_light_augmentation_pipeline(seed=RANDOM_SEED)
+    print(f"  • Light Pipeline Name   : {light_pipeline.name}")
+    print(f"  • Light Pipeline Layers : {[layer.name for layer in light_pipeline.layers]}")
+    assert len(light_pipeline.layers) == 1, "Light pipeline must have exactly 1 layer (RandomFlip)"
 
-    # Test with dummy batch
+    # 2. Moderate Augmentation Pipeline Verification
+    mod_pipeline = get_moderate_augmentation_pipeline(
+        rotation_factor=0.05,
+        height_shift_factor=0.05,
+        width_shift_factor=0.05,
+        seed=RANDOM_SEED,
+    )
+    print(f"  • Mod Pipeline Name     : {mod_pipeline.name}")
+    print(f"  • Mod Pipeline Layers   : {[layer.name for layer in mod_pipeline.layers]}")
+    assert len(mod_pipeline.layers) == 3, "Moderate pipeline must have exactly 3 layers (Flip, Rotation, Translation)"
+
+    # 3. Dynamic Tensor Transformation Smoke Test
     dummy_batch = tf.random.uniform(shape=(4, 32, 32, 3), minval=0.0, maxval=1.0)
-    augmented_batch = pipeline(dummy_batch, training=True)
-    unaugmented_batch = pipeline(dummy_batch, training=False)
+    mod_aug_out = mod_pipeline(dummy_batch, training=True)
+    mod_unaug_out = mod_pipeline(dummy_batch, training=False)
 
-    print(f"  • Input Shape: {dummy_batch.shape}")
-    print(f"  • Augmented Output Shape (training=True): {augmented_batch.shape}")
-    print(f"  • Inference Output Shape (training=False): {unaugmented_batch.shape}")
-    assert augmented_batch.shape == dummy_batch.shape, "Shape mismatch after augmentation"
-    assert unaugmented_batch.shape == dummy_batch.shape, "Shape mismatch during inference"
+    print(f"  • Input Shape           : {dummy_batch.shape}")
+    print(f"  • Mod Augmented Shape   : {mod_aug_out.shape} (training=True)")
+    print(f"  • Mod Inference Shape   : {mod_unaug_out.shape} (training=False)")
+    assert mod_aug_out.shape == dummy_batch.shape, "Shape mismatch after moderate augmentation"
+    assert mod_unaug_out.shape == dummy_batch.shape, "Shape mismatch during inference"
 
-    print("  [SUCCESS] Transforms module verified successfully.")
+    # Test config verification functions
+    test_mod_cfg = {
+        "horizontal_flip": True,
+        "rotation_factor": 0.05,
+        "height_shift_factor": 0.05,
+        "width_shift_factor": 0.05,
+        "zoom_factor": 0.0,
+        "brightness_factor": 0.0,
+        "contrast_factor": 0.0,
+        "crop": False,
+        "resize": False,
+        "apply_to": "train_only",
+        "validation_augmented": False,
+        "test_augmented": False,
+    }
+    verify_moderate_augmentation_config(test_mod_cfg)
+    print("  • Moderate Config Check : PASSED (verify_moderate_augmentation_config)")
+
+    print("  [SUCCESS] Transforms module verified successfully for Experiments 2A and 2B.")
     print("=" * 75)
+
