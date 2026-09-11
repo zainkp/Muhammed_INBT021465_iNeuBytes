@@ -381,7 +381,9 @@ def normalize_images(images: np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: Normalized float32 image array with values in [0.0, 1.0].
     """
-    return images.astype(np.float32) / 255.0
+    norm = images.astype(np.float32)
+    norm /= 255.0
+    return norm
 
 
 def load_cifar10_data(
@@ -439,6 +441,8 @@ def load_cifar10_data(
     x_val = x_train_full[val_idx]
     y_val = y_train_full[val_idx]
 
+    del x_train_full, y_train_full
+
     x_test = x_test_raw
     y_test = y_test_raw
 
@@ -448,6 +452,7 @@ def load_cifar10_data(
         x_train = normalize_images(x_train)
         x_val = normalize_images(x_val)
         x_test = normalize_images(x_test)
+
 
     # 5. Format labels
     if flatten_labels:

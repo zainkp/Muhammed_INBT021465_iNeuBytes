@@ -25,6 +25,19 @@ Experiment 2B (Moderate Augmentation) Specifications:
 - Validation and test datasets remain 100% unaugmented.
 - Source CIFAR-10 data on disk and in memory is not permanently modified.
 - Deterministic random seed (42) preserved throughout.
+
+Experiment 2C (Aggressive Augmentation) Specifications:
+- Random horizontal flip: tf.keras.layers.RandomFlip(mode="horizontal", seed=seed) (Enabled)
+- Random rotation: tf.keras.layers.RandomRotation(factor=0.15, seed=seed) (Enabled, ±54 degrees)
+- Random translation: tf.keras.layers.RandomTranslation(height_factor=0.10, width_factor=0.10, seed=seed) (Enabled, ±10% / ~3.2px)
+- Random zoom: tf.keras.layers.RandomZoom(height_factor=0.20, width_factor=0.20, seed=seed) (Enabled, ±20%)
+- Random brightness: tf.keras.layers.RandomBrightness(factor=0.20, value_range=(0.0, 1.0), seed=seed) (Enabled, ±20%)
+- Random contrast: tf.keras.layers.RandomContrast(factor=0.20, seed=seed) (Enabled, ±20%)
+- Cropping / Resizing: None (32x32 image dimensions preserved)
+- Augmentation is applied exclusively to the training dataset stream.
+- Validation and test datasets remain 100% unaugmented.
+- Source CIFAR-10 data on disk and in memory is not permanently modified.
+- Deterministic random seed (42) preserved throughout.
 """
 
 import logging
@@ -151,6 +164,86 @@ def get_moderate_augmentation_pipeline(
 
 
 # ------------------------------------------------------------------------------
+# Aggressive Augmentation Layer Builder (Experiment 2C)
+# ------------------------------------------------------------------------------
+def get_aggressive_augmentation_pipeline(
+    rotation_factor: float = 0.15,
+    height_shift_factor: float = 0.10,
+    width_shift_factor: float = 0.10,
+    zoom_factor: float = 0.20,
+    brightness_factor: float = 0.20,
+    contrast_factor: float = 0.20,
+    seed: int = RANDOM_SEED,
+    name: str = "aggressive_augmentation_pipeline",
+) -> tf.keras.Sequential:
+    """
+    Construct and return a Keras Sequential preprocessing pipeline for Aggressive Data Augmentation.
+
+    Strict Experimental Controls (Experiment 2C):
+    - Random horizontal flip: tf.keras.layers.RandomFlip(mode="horizontal", seed=seed)
+    - Heavy random rotation: tf.keras.layers.RandomRotation(factor=0.15, seed=seed) (±54 degrees)
+    - Random translation: tf.keras.layers.RandomTranslation(height_factor=0.10, width_factor=0.10, seed=seed) (~±3.2 pixels)
+    - Random zoom: tf.keras.layers.RandomZoom(height_factor=0.20, width_factor=0.20, seed=seed) (±20%)
+    - Random brightness: tf.keras.layers.RandomBrightness(factor=0.20, value_range=(0.0, 1.0), seed=seed) (±20%)
+    - Random contrast: tf.keras.layers.RandomContrast(factor=0.20, seed=seed) (±20%)
+    - No resizing or cropping.
+
+    Args:
+        rotation_factor (float): Rotation range as a fraction of 2pi (0.15 = ±54 deg). Defaults to 0.15.
+        height_shift_factor (float): Vertical translation range (0.10 = ±10% or ~3.2px). Defaults to 0.10.
+        width_shift_factor (float): Horizontal translation range (0.10 = ±10% or ~3.2px). Defaults to 0.10.
+        zoom_factor (float): Zoom variation range (0.20 = ±20%). Defaults to 0.20.
+        brightness_factor (float): Brightness variation range (0.20 = ±20%). Defaults to 0.20.
+        contrast_factor (float): Contrast variation range (0.20 = ±20%). Defaults to 0.20.
+        seed (int): Deterministic random seed for Keras augmentation layers. Defaults to RANDOM_SEED (42).
+        name (str): Layer name for the Sequential pipeline. Defaults to "aggressive_augmentation_pipeline".
+
+    Returns:
+        tf.keras.Sequential: A Sequential model containing 6 augmentation layers.
+    """
+    augmentation_model = tf.keras.Sequential(
+        [
+            layers.Input(shape=IMAGE_SHAPE, name="augmentation_input"),
+            layers.RandomFlip(mode="horizontal", seed=seed, name="random_horizontal_flip"),
+            layers.RandomRotation(factor=rotation_factor, seed=seed, name="random_rotation"),
+            layers.RandomTranslation(
+                height_factor=height_shift_factor,
+                width_factor=width_shift_factor,
+                seed=seed,
+                name="random_translation",
+            ),
+            layers.RandomZoom(
+                height_factor=zoom_factor,
+                width_factor=zoom_factor,
+                seed=seed,
+                name="random_zoom",
+            ),
+            layers.RandomBrightness(
+                factor=brightness_factor,
+                value_range=(0.0, 1.0),
+                seed=seed,
+                name="random_brightness",
+            ),
+            layers.RandomContrast(
+                factor=contrast_factor,
+                seed=seed,
+                name="random_contrast",
+            ),
+        ],
+        name=name,
+    )
+    logger.info(
+        f"Built aggressive augmentation pipeline '{name}' with RandomFlip(mode='horizontal', seed={seed}), "
+        f"RandomRotation(factor={rotation_factor}, seed={seed}), "
+        f"RandomTranslation(height_factor={height_shift_factor}, width_factor={width_shift_factor}, seed={seed}), "
+        f"RandomZoom(height_factor={zoom_factor}, width_factor={zoom_factor}, seed={seed}), "
+        f"RandomBrightness(factor={brightness_factor}, value_range=(0.0, 1.0), seed={seed}), and "
+        f"RandomContrast(factor={contrast_factor}, seed={seed})."
+    )
+    return augmentation_model
+
+
+# ------------------------------------------------------------------------------
 # Configurable Augmentation Pipeline Builder
 # ------------------------------------------------------------------------------
 def build_augmentation_pipeline(
@@ -171,6 +264,9 @@ def build_augmentation_pipeline(
     all numeric factors must be 0.0.
     For Moderate Augmentation (Experiment 2B), horizontal_flip is True,
     rotation_factor is 0.05, and translation factors are 0.05.
+    For Aggressive Augmentation (Experiment 2C), horizontal_flip is True,
+    rotation_factor is 0.15, translation factors are 0.10, zoom is 0.20,
+    brightness is 0.20, and contrast is 0.20.
 
     Args:
         horizontal_flip (bool): Whether to enable random horizontal flipping.
@@ -210,12 +306,22 @@ def build_augmentation_pipeline(
 
     if zoom_factor > 0.0:
         augmentation_layers.append(
-            layers.RandomZoom(height_factor=zoom_factor, seed=seed, name="random_zoom")
+            layers.RandomZoom(
+                height_factor=zoom_factor,
+                width_factor=zoom_factor,
+                seed=seed,
+                name="random_zoom",
+            )
         )
 
     if brightness_factor > 0.0:
         augmentation_layers.append(
-            layers.RandomBrightness(factor=brightness_factor, seed=seed, name="random_brightness")
+            layers.RandomBrightness(
+                factor=brightness_factor,
+                value_range=(0.0, 1.0),
+                seed=seed,
+                name="random_brightness",
+            )
         )
 
     if contrast_factor > 0.0:
@@ -302,6 +408,50 @@ def create_moderate_augmented_train_dataset(
 
     logger.info(
         f"Creating moderate-augmented training tf.data pipeline (batch_size={batch_size}, shuffle_buffer={shuffle_buffer})..."
+    )
+
+    train_ds = (
+        tf.data.Dataset.from_tensor_slices((x_train, y_train))
+        .shuffle(buffer_size=shuffle_buffer, seed=seed, reshuffle_each_iteration=True)
+        .batch(batch_size)
+        .map(
+            lambda x, y: (augmentation_layer(x, training=True), y),
+            num_parallel_calls=tf.data.AUTOTUNE,
+        )
+        .prefetch(buffer_size=tf.data.AUTOTUNE)
+    )
+
+    return train_ds
+
+
+def create_aggressive_augmented_train_dataset(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    shuffle_buffer: int = 10000,
+    seed: int = RANDOM_SEED,
+    augmentation_layer: Optional[tf.keras.layers.Layer] = None,
+) -> tf.data.Dataset:
+    """
+    Construct high-performance tf.data.Dataset training pipeline with Aggressive Data Augmentation.
+
+    Args:
+        x_train (np.ndarray): Training images of shape (N, 32, 32, 3) in [0.0, 1.0].
+        y_train (np.ndarray): Training integer labels of shape (N,).
+        batch_size (int): Mini-batch size. Defaults to DEFAULT_BATCH_SIZE (64).
+        shuffle_buffer (int): Buffer size for training dataset shuffling. Defaults to 10,000.
+        seed (int): Deterministic random seed. Defaults to RANDOM_SEED (42).
+        augmentation_layer (Optional[tf.keras.layers.Layer]): Preprocessing layer/model.
+            If None, instantiates get_aggressive_augmentation_pipeline(seed=seed).
+
+    Returns:
+        tf.data.Dataset: Configured training tf.data.Dataset.
+    """
+    if augmentation_layer is None:
+        augmentation_layer = get_aggressive_augmentation_pipeline(seed=seed)
+
+    logger.info(
+        f"Creating aggressive-augmented training tf.data pipeline (batch_size={batch_size}, shuffle_buffer={shuffle_buffer})..."
     )
 
     train_ds = (
@@ -539,18 +689,104 @@ def verify_moderate_augmentation_config(config: Dict[str, Any]) -> bool:
     return True
 
 
+def verify_aggressive_augmentation_config(config: Dict[str, Any]) -> bool:
+    """
+    Strictly verify that an augmentation configuration dictionary complies with Experiment 2C controls.
+
+    Guarantees:
+    - horizontal_flip is True
+    - rotation_factor == 0.15 (exact ±54 deg)
+    - height_shift_factor == 0.10 (exact ±10% / ~3.2px)
+    - width_shift_factor == 0.10 (exact ±10% / ~3.2px)
+    - zoom_factor == 0.20 (exact ±20%)
+    - brightness_factor == 0.20 (exact ±20%)
+    - contrast_factor == 0.20 (exact ±20%)
+    - crop is False
+    - resize is False
+    - apply_to == "train_only"
+    - validation_augmented is False
+    - test_augmented is False
+
+    Args:
+        config (Dict[str, Any]): Augmentation config section.
+
+    Raises:
+        ValueError: If any parameter deviates from exact Experiment 2C controls.
+
+    Returns:
+        bool: True if configuration complies with Experiment 2C controls.
+    """
+    if not config.get("horizontal_flip", False):
+        raise ValueError("Experiment 2C violation: 'horizontal_flip' must be True.")
+
+    rotation_factor = float(config.get("rotation_factor", 0.0))
+    if abs(rotation_factor - 0.15) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'rotation_factor' must be exactly 0.15 (±54 deg), got {rotation_factor}."
+        )
+
+    height_shift = float(config.get("height_shift_factor", 0.0))
+    if abs(height_shift - 0.10) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'height_shift_factor' must be exactly 0.10 (±10%), got {height_shift}."
+        )
+
+    width_shift = float(config.get("width_shift_factor", 0.0))
+    if abs(width_shift - 0.10) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'width_shift_factor' must be exactly 0.10 (±10%), got {width_shift}."
+        )
+
+    zoom_factor = float(config.get("zoom_factor", 0.0))
+    if abs(zoom_factor - 0.20) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'zoom_factor' must be exactly 0.20 (±20%), got {zoom_factor}."
+        )
+
+    brightness_factor = float(config.get("brightness_factor", 0.0))
+    if abs(brightness_factor - 0.20) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'brightness_factor' must be exactly 0.20 (±20%), got {brightness_factor}."
+        )
+
+    contrast_factor = float(config.get("contrast_factor", 0.0))
+    if abs(contrast_factor - 0.20) > 1e-6:
+        raise ValueError(
+            f"Experiment 2C violation: 'contrast_factor' must be exactly 0.20 (±20%), got {contrast_factor}."
+        )
+
+    if config.get("crop", False):
+        raise ValueError("Experiment 2C violation: 'crop' must be False.")
+
+    if config.get("resize", False):
+        raise ValueError("Experiment 2C violation: 'resize' must be False.")
+
+    if config.get("apply_to") != "train_only":
+        raise ValueError(
+            f"Experiment 2C violation: 'apply_to' must be 'train_only', got '{config.get('apply_to')}'."
+        )
+
+    if config.get("validation_augmented", False):
+        raise ValueError("Experiment 2C violation: validation dataset must NOT be augmented.")
+
+    if config.get("test_augmented", False):
+        raise ValueError("Experiment 2C violation: test dataset must NOT be augmented.")
+
+    return True
+
+
 # ------------------------------------------------------------------------------
 # Standalone Module Verification
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     print("=" * 75)
-    print("  Transforms & Augmentation Module Verification (Experiments 2A & 2B)")
+    print("  Transforms & Augmentation Module Verification (Experiments 2A, 2B & 2C)")
     print("=" * 75)
 
     # 1. Light Augmentation Pipeline Verification
     light_pipeline = get_light_augmentation_pipeline(seed=RANDOM_SEED)
-    print(f"  • Light Pipeline Name   : {light_pipeline.name}")
-    print(f"  • Light Pipeline Layers : {[layer.name for layer in light_pipeline.layers]}")
+    print(f"  • Light Pipeline Name      : {light_pipeline.name}")
+    print(f"  • Light Pipeline Layers    : {[layer.name for layer in light_pipeline.layers]}")
     assert len(light_pipeline.layers) == 1, "Light pipeline must have exactly 1 layer (RandomFlip)"
 
     # 2. Moderate Augmentation Pipeline Verification
@@ -560,39 +796,58 @@ if __name__ == "__main__":
         width_shift_factor=0.05,
         seed=RANDOM_SEED,
     )
-    print(f"  • Mod Pipeline Name     : {mod_pipeline.name}")
-    print(f"  • Mod Pipeline Layers   : {[layer.name for layer in mod_pipeline.layers]}")
+    print(f"  • Mod Pipeline Name        : {mod_pipeline.name}")
+    print(f"  • Mod Pipeline Layers      : {[layer.name for layer in mod_pipeline.layers]}")
     assert len(mod_pipeline.layers) == 3, "Moderate pipeline must have exactly 3 layers (Flip, Rotation, Translation)"
 
-    # 3. Dynamic Tensor Transformation Smoke Test
-    dummy_batch = tf.random.uniform(shape=(4, 32, 32, 3), minval=0.0, maxval=1.0)
-    mod_aug_out = mod_pipeline(dummy_batch, training=True)
-    mod_unaug_out = mod_pipeline(dummy_batch, training=False)
+    # 3. Aggressive Augmentation Pipeline Verification
+    agg_pipeline = get_aggressive_augmentation_pipeline(
+        rotation_factor=0.15,
+        height_shift_factor=0.10,
+        width_shift_factor=0.10,
+        zoom_factor=0.20,
+        brightness_factor=0.20,
+        contrast_factor=0.20,
+        seed=RANDOM_SEED,
+    )
+    print(f"  • Agg Pipeline Name        : {agg_pipeline.name}")
+    print(f"  • Agg Pipeline Layers      : {[layer.name for layer in agg_pipeline.layers]}")
+    assert len(agg_pipeline.layers) == 6, (
+        "Aggressive pipeline must have exactly 6 layers (Flip, Rotation, Translation, Zoom, Brightness, Contrast)"
+    )
 
-    print(f"  • Input Shape           : {dummy_batch.shape}")
-    print(f"  • Mod Augmented Shape   : {mod_aug_out.shape} (training=True)")
-    print(f"  • Mod Inference Shape   : {mod_unaug_out.shape} (training=False)")
-    assert mod_aug_out.shape == dummy_batch.shape, "Shape mismatch after moderate augmentation"
-    assert mod_unaug_out.shape == dummy_batch.shape, "Shape mismatch during inference"
+    # 4. Dynamic Tensor Transformation Smoke Test
+    dummy_batch = tf.random.uniform(shape=(4, 32, 32, 3), minval=0.0, maxval=1.0)
+    agg_aug_out = agg_pipeline(dummy_batch, training=True)
+    agg_unaug_out = agg_pipeline(dummy_batch, training=False)
+
+    print(f"  • Input Shape              : {dummy_batch.shape}")
+    print(f"  • Agg Augmented Shape      : {agg_aug_out.shape} (training=True)")
+    print(f"  • Agg Inference Shape      : {agg_unaug_out.shape} (training=False)")
+    assert agg_aug_out.shape == dummy_batch.shape, "Shape mismatch after aggressive augmentation"
+    assert agg_unaug_out.shape == dummy_batch.shape, "Shape mismatch during inference"
+
+    # In training=False mode, preprocessing layers should return identical tensors
+    np.testing.assert_allclose(agg_unaug_out.numpy(), dummy_batch.numpy(), atol=1e-6, err_msg="Inference mode should not alter images")
 
     # Test config verification functions
-    test_mod_cfg = {
+    test_agg_cfg = {
         "horizontal_flip": True,
-        "rotation_factor": 0.05,
-        "height_shift_factor": 0.05,
-        "width_shift_factor": 0.05,
-        "zoom_factor": 0.0,
-        "brightness_factor": 0.0,
-        "contrast_factor": 0.0,
+        "rotation_factor": 0.15,
+        "height_shift_factor": 0.10,
+        "width_shift_factor": 0.10,
+        "zoom_factor": 0.20,
+        "brightness_factor": 0.20,
+        "contrast_factor": 0.20,
         "crop": False,
         "resize": False,
         "apply_to": "train_only",
         "validation_augmented": False,
         "test_augmented": False,
     }
-    verify_moderate_augmentation_config(test_mod_cfg)
-    print("  • Moderate Config Check : PASSED (verify_moderate_augmentation_config)")
+    verify_aggressive_augmentation_config(test_agg_cfg)
+    print("  • Aggressive Config Check  : PASSED (verify_aggressive_augmentation_config)")
 
-    print("  [SUCCESS] Transforms module verified successfully for Experiments 2A and 2B.")
+    print("  [SUCCESS] Transforms module verified successfully for Experiments 2A, 2B, and 2C.")
     print("=" * 75)
 

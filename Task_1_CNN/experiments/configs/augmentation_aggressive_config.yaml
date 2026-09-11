@@ -1,0 +1,65 @@
+# ==============================================================================
+# Task 1 Part B - Experiment 2C Configuration: Baseline + Aggressive Augmentation
+# Random Horizontal Flip + Rotation (0.15, ±54°) + Translation (0.10, ±10% / ~3.2px)
+# + Zoom (0.20, ±20%) + Brightness (0.20, ±20%) + Contrast (0.20, ±20%)
+# TensorFlow / Keras Implementation
+# ==============================================================================
+
+experiment_name: "augmentation_aggressive_cifar10"
+experiment_type: "augmentation"
+augmentation_level: "aggressive"
+seed: 42
+
+augmentation:
+  horizontal_flip: true
+  rotation_factor: 0.15
+  height_shift_factor: 0.10
+  width_shift_factor: 0.10
+  zoom_factor: 0.20
+  brightness_factor: 0.20
+  contrast_factor: 0.20
+  crop: false
+  resize: false
+  apply_to: "train_only"
+  validation_augmented: false
+  test_augmented: false
+
+dataset:
+  name: "cifar10"
+  image_shape: [32, 32, 3]
+  num_classes: 10
+  batch_size: 64
+  # Frozen split counts (out of 50k original training images)
+  train_samples: 40000
+  val_samples: 10000
+  test_samples: 10000
+  split_file: "data/splits/cifar10_split_indices.json"
+
+model:
+  architecture: "baseline_cifar10_cnn"
+  in_shape: [32, 32, 3]
+  num_classes: 10
+  regularization: "none"
+  dropout_rate: 0.0
+  batch_normalization: false
+  l1_reg: 0.0
+  l2_reg: 0.0
+
+training:
+  # Fixed epoch budget across experiments
+  epochs: 30
+  initial_lr: 0.001
+  optimizer: "adam"
+  loss: "sparse_categorical_crossentropy"
+  metrics: ["accuracy"]
+  early_stopping: false
+  lr_schedule: false
+  test_evaluation_performed: false
+  test_set_isolated: true
+  checkpoint_metric: "val_accuracy"
+  checkpoint_mode: "max"
+  checkpoint_filename: "augmentation_aggressive_cifar10_best.keras"
+  csv_log_filename: "augmentation_aggressive_training_log.csv"
+  history_filename: "augmentation_aggressive_training_history.json"
+  summary_filename: "augmentation_aggressive_experiment_summary.json"
+  curves_filename: "augmentation_aggressive_training_curves.png"
