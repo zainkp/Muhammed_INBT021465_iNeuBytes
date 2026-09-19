@@ -88,13 +88,21 @@ class BaselineTrainer:
         monitor_metric: str = "val_accuracy",
         monitor_mode: str = "max",
         experiment_name: str = "baseline_cnn",
+        optimizer: Union[str, tf.keras.optimizers.Optimizer] = "adam",
+        momentum: float = 0.0,
+        nesterov: bool = False,
+        beta_1: float = 0.9,
+        beta_2: float = 0.999,
+        epsilon: float = 1e-7,
+        rho: float = 0.9,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Initialize the Baseline Trainer.
 
         Args:
             model (tf.keras.Model): An already-built (uncompiled or compiled) Keras model.
-            learning_rate (float): Initial learning rate for Adam optimizer. Defaults to DEFAULT_LEARNING_RATE (0.001).
+            learning_rate (float): Initial learning rate for optimizer. Defaults to DEFAULT_LEARNING_RATE (0.001).
             epochs (int): Fixed number of training epochs. Must equal DEFAULT_EPOCHS (30).
             batch_size (int): Mini-batch size. Defaults to DEFAULT_BATCH_SIZE (64).
             checkpoints_dir (Union[str, Path]): Directory to store model checkpoints. Defaults to CHECKPOINTS_DIR.
@@ -105,6 +113,14 @@ class BaselineTrainer:
             monitor_metric (str): Metric to monitor for best checkpoint saving. Defaults to "val_accuracy".
             monitor_mode (str): Optimization mode ('max' or 'min') for monitor_metric. Defaults to "max".
             experiment_name (str): Experiment identifier for metadata logging. Defaults to "baseline_cnn".
+            optimizer (Union[str, tf.keras.optimizers.Optimizer]): Optimizer identifier ('adam', 'sgd', 'rmsprop') or Keras Optimizer instance.
+            momentum (float): Momentum factor for SGD optimizer (e.g., 0.9). Defaults to 0.0.
+            nesterov (bool): Whether to apply Nesterov momentum for SGD. Defaults to False.
+            beta_1 (float): Exponential decay rate for the 1st moment estimates in Adam. Defaults to 0.9.
+            beta_2 (float): Exponential decay rate for the 2nd moment estimates in Adam. Defaults to 0.999.
+            epsilon (float): Small constant for numerical stability in Adam/RMSprop. Defaults to 1e-7.
+            rho (float): Discounting factor for the gradient in RMSprop. Defaults to 0.9.
+            optimizer_kwargs (Optional[Dict[str, Any]]): Additional keyword arguments passed to optimizer constructor.
 
         Raises:
             ValueError: If epochs is explicitly provided with a value other than DEFAULT_EPOCHS (30).
@@ -120,6 +136,15 @@ class BaselineTrainer:
         self.epochs = DEFAULT_EPOCHS
         self.batch_size = int(batch_size)
         self.experiment_name = experiment_name
+
+        self.optimizer = optimizer
+        self.momentum = float(momentum)
+        self.nesterov = bool(nesterov)
+        self.beta_1 = float(beta_1)
+        self.beta_2 = float(beta_2)
+        self.epsilon = float(epsilon)
+        self.rho = float(rho)
+        self.optimizer_kwargs = optimizer_kwargs or {}
 
         self.checkpoints_dir = Path(checkpoints_dir)
         self.checkpoint_filename = checkpoint_filename
@@ -145,9 +170,10 @@ class BaselineTrainer:
     def compile_model(
         self,
         learning_rate: Optional[float] = None,
+        optimizer: Optional[Union[str, tf.keras.optimizers.Optimizer]] = None,
     ) -> tf.keras.Model:
         """
-        Compile the Keras model with Adam optimizer, Sparse Categorical Crossentropy, and accuracy.
+        Compile the Keras model with the configured optimizer, Sparse Categorical Crossentropy, and accuracy.
 
         Loss Function Rationale:
         - `SparseCategoricalCrossentropy(from_logits=False)` is used because the CIFAR-10 dataset
@@ -159,16 +185,59 @@ class BaselineTrainer:
 
         Args:
             learning_rate (Optional[float]): Custom learning rate. If None, uses self.learning_rate.
+            optimizer (Optional[Union[str, tf.keras.optimizers.Optimizer]]): Custom optimizer instance or name.
 
         Returns:
             tf.keras.Model: Compiled Keras model instance.
         """
         lr = learning_rate if learning_rate is not None else self.learning_rate
+        opt_choice = optimizer if optimizer is not None else self.optimizer
+        opt_kwargs = dict(self.optimizer_kwargs or {})
 
-        optimizer = tf.keras.optimizers.Adam(
-            learning_rate=lr,
-            name="adam_optimizer",
-        )
+        if isinstance(opt_choice, tf.keras.optimizers.Optimizer):
+            optimizer_instance = opt_choice
+            optimizer_name_log = type(opt_choice).__name__
+        elif isinstance(opt_choice, str):
+            opt_lower = opt_choice.lower()
+            if opt_lower in ("adam", "adam_optimizer"):
+                optimizer_instance = tf.keras.optimizers.Adam(
+                    learning_rate=lr,
+                    beta_1=self.beta_1,
+                    beta_2=self.beta_2,
+                    epsilon=self.epsilon,
+                    name="adam_optimizer",
+                    **opt_kwargs,
+                )
+                optimizer_name_log = f"Adam(learning_rate={lr}, beta_1={self.beta_1}, beta_2={self.beta_2}, epsilon={self.epsilon})"
+            elif opt_lower in ("sgd", "sgd_momentum", "sgd_optimizer"):
+                optimizer_instance = tf.keras.optimizers.SGD(
+                    learning_rate=lr,
+                    momentum=self.momentum,
+                    nesterov=self.nesterov,
+                    name="sgd_optimizer",
+                    **opt_kwargs,
+                )
+                optimizer_name_log = f"SGD(learning_rate={lr}, momentum={self.momentum}, nesterov={self.nesterov})"
+            elif opt_lower in ("rmsprop", "rmsprop_optimizer"):
+                # RMSprop uses rho=0.9, momentum=0.0, epsilon=1e-7
+                optimizer_instance = tf.keras.optimizers.RMSprop(
+                    learning_rate=lr,
+                    rho=self.rho,
+                    momentum=self.momentum if self.momentum != 0.0 else 0.0,
+                    epsilon=self.epsilon,
+                    name="rmsprop_optimizer",
+                    **opt_kwargs,
+                )
+                optimizer_name_log = f"RMSprop(learning_rate={lr}, rho={self.rho}, epsilon={self.epsilon})"
+            else:
+                raise ValueError(
+                    f"Unsupported optimizer name: '{opt_choice}'. "
+                    f"Supported options are 'adam', 'sgd', 'rmsprop', or a tf.keras.optimizers.Optimizer instance."
+                )
+        else:
+            raise TypeError(
+                f"optimizer must be a string or tf.keras.optimizers.Optimizer instance, got {type(opt_choice)}"
+            )
 
         loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=False,
@@ -181,13 +250,13 @@ class BaselineTrainer:
 
         logger.info(
             f"Compiling model '{self.model.name}' with:\n"
-            f"  - Optimizer : Adam (learning_rate={lr})\n"
+            f"  - Optimizer : {optimizer_name_log}\n"
             f"  - Loss      : SparseCategoricalCrossentropy(from_logits=False)\n"
             f"  - Metrics   : ['accuracy']"
         )
 
         self.model.compile(
-            optimizer=optimizer,
+            optimizer=optimizer_instance,
             loss=loss_fn,
             metrics=metrics,
         )
@@ -260,12 +329,16 @@ class BaselineTrainer:
         save_path = Path(filepath) if filepath is not None else self.history_filepath
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
+        optimizer_name_str = self.optimizer if isinstance(self.optimizer, str) else type(self.optimizer).__name__
+
         # Format history metrics to native Python floats for JSON serialization
         history_dict: Dict[str, Any] = {
             "experiment": self.experiment_name,
             "epochs_configured": self.epochs,
             "epochs_completed": len(history.epoch) if hasattr(history, "epoch") else len(next(iter(history.history.values()))),
+            "optimizer": optimizer_name_str,
             "learning_rate": self.learning_rate,
+            "momentum": self.momentum,
             "batch_size": self.batch_size,
             "monitor_metric": self.monitor_metric,
             "history": {},
